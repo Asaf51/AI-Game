@@ -9,13 +9,15 @@ class NeuralNetwork(object):
         # Sounds good, it is multiplied by 2 because we have a second
         # hidden layer - the softmax layer
         self.hidden_layer_size = 16
-        self.ouput_layer_size = 2
+        self.ouput_layer_size = 4
 
         self.input_to_hidden_weights = numpy.random.randn(
             self.input_layer_size, self.hidden_layer_size)
 
         self.hidden_to_output_weights = numpy.random.randn(
             self.hidden_layer_size, self.ouput_layer_size)
+
+        # self.bias = numpy.random.rand(1)[0]
 
     def forward(self, inputs):
         z1 = numpy.dot(inputs, self.input_to_hidden_weights)

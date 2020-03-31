@@ -34,19 +34,19 @@ config = collections.namedtuple('Configuration', [
     car_color=(255, 255, 255),
     bg_color=(0, 0, 0),
     camera_speed=2,
-    fps=60,
+    fps=120,
     player_movement_speed=3,
     bg_objects_color=(255, 0, 0),
     margin_between_bg_objects=10,
     bg_object_size=14,
-    number_of_obstacles=6,
+    number_of_obstacles=2,
     min_obstacle_len=30,
     obstacle_width=1,
     obstacle_color=(0, 0, 255),
-    field_of_view=120,
+    field_of_view=360,
     number_of_rays=40,
     ray_color=(255, 255, 0),
-    player=1
+    player=0
 )
 
 
@@ -69,19 +69,63 @@ class Ray(object):
         return math.sqrt((point[0] - self.start_pos_x) ** 2 + (point[1] - self.start_pos_y) ** 2)
 
 
+class Car(object):
+    def __init__(self, neural_net=None, color=None):
+        self.__create_rect()
+        self.fitness = 0
+        self.alive = True
+
+        if color:
+            self.color = color
+        else:
+            self.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+        self.ray_distances = []
+
+        if neural_net:
+            self.nn = neural_net
+        else:
+            self.nn = nn.NeuralNetwork()
+        self.fitness = 0
+
+    def __create_rect(self):
+        self.rect = pygame.Rect((
+            (config.screen_x - config.car_size) / 2,
+            (config.screen_y - config.car_size) / 2),
+            (config.car_size, config.car_size))
+
+    def kill(self):
+        print "Moved: {}".format(self.fitness)
+        self.alive = False
+
+    def set_fitness(self, fitness):
+        self.fitness = fitness
+
+    def moved(self):
+        self.fitness += config.player_movement_speed
+
+    def duplicate(self):
+        return Car(self.nn, self.color)
+
+    def reset(self):
+        self.ray_distances = []
+        self.alive = True
+        self.fitness = 0
+        self.__create_rect()
+
+
 class CarGame(object):
-    def __init__(self):
+    def __init__(self, next_gen):
         pygame.display.set_caption("Car Game")
 
         self.clock = pygame.time.Clock()
         self.screen = pygame.display.set_mode(
             [config.screen_x, config.screen_y], pygame.HWSURFACE, 32)
 
-        self.main_car = pygame.Rect((
-            (config.screen_x - config.car_size) / 2,
-            (config.screen_y - config.car_size) / 2),
-            (config.car_size, config.car_size)
-        )
+        self.ga = ga.GeneticAlgorithm()
+        if next_gen is None:
+            self.main_cars = [Car() for i in xrange(ga.ga_config.population_size)]
+        else:
+            self.main_cars = next_gen
 
         self.running = True
         self.right_background_objects = []
@@ -93,10 +137,16 @@ class CarGame(object):
             pygame.Rect((config.screen_x / 5, 0), (1, config.screen_y)),
             pygame.Rect((config.screen_x - config.screen_x / 5, 0), (1, config.screen_y))
         ]
+
         self.__create_background_objects()
 
-        self.nn_player = nn.NeuralNetwork()
-        self.ga = ga.GeneticAlgorithm()
+    def __how_many_cars_alive(self):
+        alive = 0
+        for car in self.main_cars:
+            if car.alive:
+                alive += 1
+
+        return alive
 
     def __create_background_objects(self):
         objects_per_line = config.screen_y / (
@@ -140,9 +190,9 @@ class CarGame(object):
                 pygame.quit()
                 break
 
-    def __validate_car_in_borders(self):
-        if self.main_car.bottom > config.screen_y:
-            self.running = False
+    def __validate_car_in_borders(self, car):
+        if car.rect.bottom > config.screen_y:
+            car.kill()
 
     def __get_the_upper_bg_object(self):
         upper_left_bg_object = self.left_background_objects[0]
@@ -195,17 +245,17 @@ class CarGame(object):
         for bg_object in self.right_background_objects:
             pygame.draw.rect(self.screen, config.bg_objects_color, bg_object)
 
-    def __can_move(self):
+    def __can_move(self, car):
         """for bg_object in self.right_background_objects + self.left_background_objects:
             if self.main_car.colliderect(bg_object):
                 return False"""
 
         for border in self.borders:
-            if self.main_car.colliderect(border):
+            if car.rect.colliderect(border):
                 return False
 
         for obs in self.obstacles:
-            if self.main_car.colliderect(obs):
+            if car.rect.colliderect(obs):
                 return False
 
         return True
@@ -216,20 +266,14 @@ class CarGame(object):
 
         return True
 
-    def __get_distances(self):
-        to_bottom = config.screen_y - self.main_car.bottom
-        to_up = self.main_car.top
-
-        return to_bottom, to_up
-
-    def __calc_rays(self):
-        self.rays = []
+    def __calc_rays(self, car):
+        car.rays = []
         for angle in range(180 - config.field_of_view / 2,
                            180 + config.field_of_view / 2,
                            config.field_of_view / config.number_of_rays):
             ray = Ray(
-                self.main_car.left + config.car_size / 2,
-                self.main_car.top, angle)
+                car.rect.left + config.car_size / 2,
+                car.rect.top, angle)
 
             closest = config.screen_x
             # line = collections.namedtuple('Line', ['left', 'right', 'bottom'])
@@ -258,10 +302,10 @@ class CarGame(object):
 
                         closest = ray.distance
 
-            self.rays.append(ray)
+            car.rays.append(ray)
 
-    def __draw_rays(self):
-        for ray in self.rays:
+    def __draw_rays(self, car):
+        for ray in car.rays:
             pygame.draw.line(
                 self.screen, config.ray_color,
                 (ray.start_pos_x, ray.start_pos_y), (ray.end_pos_x, ray.end_pos_y), 1)
@@ -270,58 +314,75 @@ class CarGame(object):
         for border in self.borders:
             pygame.draw.rect(self.screen, config.bg_objects_color, border)
 
-    def __move_main_car_forward(self):
-        self.main_car = self.main_car.move(0, -config.player_movement_speed)
+    def __move_main_car_forward(self, car):
+        self.main_cars[self.main_cars.index(car)].rect = car.rect.move(
+            0, -config.player_movement_speed)
 
-    def __move_main_car_backward(self):
-        self.main_car = self.main_car.move(0, config.player_movement_speed)
+        car.moved()
 
-    def __move_main_car_left(self):
-        self.main_car = self.main_car.move(-config.player_movement_speed, 0)
+    def __move_main_car_backward(self, car):
+        self.main_cars[self.main_cars.index(car)].rect = car.rect.move(
+            0, config.player_movement_speed)
 
-    def __move_main_car_right(self):
-        self.main_car = self.main_car.move(config.player_movement_speed, 0)
+    def __move_main_car_left(self, car):
+        self.main_cars[self.main_cars.index(car)].rect = car.rect.move(
+            -config.player_movement_speed, 0)
+
+    def __move_main_car_right(self, car):
+        self.main_cars[self.main_cars.index(car)].rect = car.rect.move(
+            config.player_movement_speed, 0)
 
     def run(self):
         start_time = time.time()
         while self.running:
-            self.__get_distances()
             self.time = self.clock.tick(config.fps)
-            self.main_car = self.main_car.move(0, config.camera_speed)
-            # self.__update_bg()
+
+            if self.__how_many_cars_alive() == 0:
+                break
+
+            alive_cars = [car for car in self.main_cars if car.alive]
+            for car in alive_cars:
+                self.main_cars[self.main_cars.index(car)].rect = car.rect.move(
+                    0, config.camera_speed)
+
+                # self.__update_bg()
+                self.__calc_rays(car)
+
+                self.__validate_car_in_borders(car)
+                self.__handle_events()
+
+                if self.__can_move(car):
+                    if config.player == 0:
+                        distances = [ray.distance for ray in car.rays]
+                        left, right, up, down = car.nn.forward(distances)
+
+                        if up > 0.5:
+                            self.__move_main_car_forward(car)
+
+                        if down > 0.5:
+                            self.__move_main_car_backward(car)
+
+                        if right > 0.5:
+                            self.__move_main_car_right(car)
+
+                        if left > 0.5:
+                            self.__move_main_car_left(car)
+                    else:
+                        keys = pygame.key.get_pressed()
+                        if keys[pygame.K_LEFT]:
+                            self.__move_main_car_left(car)
+                        elif keys[pygame.K_RIGHT]:
+                            self.__move_main_car_right(car)
+
+                        if keys[pygame.K_DOWN]:
+                            self.__move_main_car_backward(car)
+                        elif keys[pygame.K_UP]:
+                            self.__move_main_car_forward(car)
+                else:
+                    car.kill()
+
             self.__update_obstacles()
-            self.__calc_rays()
             self.__create_obstacles()
-
-            self.__validate_car_in_borders()
-            self.__handle_events()
-
-            if self.__can_move():
-                if config.player == 0:
-                    y_axis, x_axis = self.nn_player.forward([ray.distance for ray in self.rays])
-
-                    if y_axis > 0.5:
-                        self.__move_main_car_forward()
-                    else:
-                        self.__move_main_car_backward()
-
-                    if x_axis > 0.5:
-                        self.__move_main_car_right()
-                    else:
-                        self.__move_main_car_left()
-
-                keys = pygame.key.get_pressed()
-                if keys[pygame.K_LEFT]:
-                    self.__move_main_car_left()
-                elif keys[pygame.K_RIGHT]:
-                    self.__move_main_car_right()
-
-                if keys[pygame.K_DOWN]:
-                    self.__move_main_car_backward()
-                elif keys[pygame.K_UP]:
-                    self.__move_main_car_forward()
-            else:
-                self.running = False
 
             self.draw()
 
@@ -330,18 +391,30 @@ class CarGame(object):
 
     def draw(self):
         self.screen.fill(config.bg_color)
-        pygame.draw.rect(self.screen, config.car_color, self.main_car)
+
+        for car in self.main_cars:
+            if car.alive:
+                pygame.draw.rect(self.screen, car.color, car.rect)
+                self.__draw_rays(car)
+
         # self.__draw_bg()
         self.__draw_borders()
         self.__draw_obstacles()
-        self.__draw_rays()
         pygame.display.update()
 
 
 def main():
     pygame.init()
-    game = CarGame()
-    game.run()
+    genetic_algo = ga.GeneticAlgorithm()
+
+    next_gen = None
+    while True:
+        game = CarGame(next_gen)
+        game.run()
+        next_gen = genetic_algo.get_the_next_generation(game.main_cars)
+
+        for i in xrange(6):
+            next_gen.append(Car())
 
 
 if __name__ == '__main__':

@@ -128,8 +128,6 @@ class CarGame(object):
             self.main_cars = next_gen
 
         self.running = True
-        self.right_background_objects = []
-        self.left_background_objects = []
 
         self.obstacles = []
         self.rays = []
@@ -138,8 +136,6 @@ class CarGame(object):
             pygame.Rect((config.screen_x - config.screen_x / 5, 0), (1, config.screen_y))
         ]
 
-        self.__create_background_objects()
-
     def __how_many_cars_alive(self):
         alive = 0
         for car in self.main_cars:
@@ -147,24 +143,6 @@ class CarGame(object):
                 alive += 1
 
         return alive
-
-    def __create_background_objects(self):
-        objects_per_line = config.screen_y / (
-            config.bg_object_size + config.margin_between_bg_objects)
-
-        for i in xrange(objects_per_line):
-            self.left_background_objects.append(
-                pygame.Rect(
-                    (config.screen_x / 5, i * (
-                        config.margin_between_bg_objects + config.bg_object_size)), (
-                        config.bg_object_size, config.bg_object_size)))
-
-            left_x = config.screen_x - (config.screen_x / 5)
-            self.right_background_objects.append(
-                pygame.Rect(
-                    (left_x, i * (
-                        config.margin_between_bg_objects + config.bg_object_size)), (
-                        config.bg_object_size, config.bg_object_size)))
 
     def __create_obstacles(self):
         current_obstacles = len(self.obstacles)
@@ -194,56 +172,12 @@ class CarGame(object):
         if car.rect.bottom > config.screen_y:
             car.kill()
 
-    def __get_the_upper_bg_object(self):
-        upper_left_bg_object = self.left_background_objects[0]
-        upper_right_bg_object = self.right_background_objects[0]
-
-        for bg_idx, bg_object in enumerate(self.left_background_objects):
-            if bg_object.top < upper_left_bg_object.top:
-                upper_left_bg_object = bg_object
-                upper_right_bg_object = self.right_background_objects[bg_idx]
-
-        return upper_left_bg_object, upper_right_bg_object
-
-    def __update_bg(self):
-        # should we add new bg object?
-        left_upper, right_upper = self.__get_the_upper_bg_object()
-        if left_upper.top >= config.margin_between_bg_objects:
-            self.left_background_objects.append(
-                pygame.Rect((
-                    config.screen_x / 5,
-                    -config.margin_between_bg_objects - config.bg_object_size / 2), (
-                    config.bg_object_size, config.bg_object_size)))
-
-            self.right_background_objects.append(
-                pygame.Rect((
-                    config.screen_x - (config.screen_x / 5),
-                    -config.margin_between_bg_objects - config.bg_object_size / 2), (
-                    config.bg_object_size, config.bg_object_size)))
-
-        for bg_idx, bg_object in enumerate(self.left_background_objects):
-            self.left_background_objects[bg_idx] = bg_object.move(0, config.camera_speed)
-            self.right_background_objects[bg_idx] = self.right_background_objects[bg_idx].move(
-                0, config.camera_speed)
-
-            # If the object is outside the screen, destory it
-            if self.left_background_objects[bg_idx].top > config.screen_y:
-                self.left_background_objects.pop(bg_idx)
-                self.right_background_objects.pop(bg_idx)
-
     def __update_obstacles(self):
         for obs_idx, obs in enumerate(self.obstacles):
             self.obstacles[obs_idx] = obs.move(0, config.camera_speed)
 
             if self.obstacles[obs_idx].top > config.screen_y:
                 self.obstacles.pop(obs_idx)
-
-    def __draw_bg(self):
-        for bg_object in self.left_background_objects:
-            pygame.draw.rect(self.screen, config.bg_objects_color, bg_object)
-
-        for bg_object in self.right_background_objects:
-            pygame.draw.rect(self.screen, config.bg_objects_color, bg_object)
 
     def __can_move(self, car):
         """for bg_object in self.right_background_objects + self.left_background_objects:
@@ -397,7 +331,6 @@ class CarGame(object):
                 pygame.draw.rect(self.screen, car.color, car.rect)
                 self.__draw_rays(car)
 
-        # self.__draw_bg()
         self.__draw_borders()
         self.__draw_obstacles()
         pygame.display.update()

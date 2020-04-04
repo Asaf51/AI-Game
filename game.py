@@ -65,12 +65,9 @@ class CarGame(object):
 
         if current_obstacles != config.number_of_obstacles:
             distance_between_borders = config.screen_x - ((config.screen_x / 5) * 2)
-            obs_len = random.randint(config.min_obstacle_len, distance_between_borders - 2 - config.car_size * 2) - 50
+            obs_len = random.randint(config.min_obstacle_len, distance_between_borders - 2 - config.car_size * 2)
 
-            obs_x = random.randint(
-                config.screen_x / 5 + 1,
-                config.screen_x - (config.screen_x / 5) - 2 - obs_len
-            )
+            obs_x = random.choice([config.screen_x / 5, (config.screen_x - (config.screen_x / 5)) - obs_len])
 
             self.obstacles.append(pygame.Rect((obs_x, -config.obstacle_width), (obs_len, config.obstacle_width)))
 

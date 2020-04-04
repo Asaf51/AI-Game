@@ -33,11 +33,11 @@ config = collections.namedtuple('Game_Configuration', [
     min_obstacle_len=30,
     obstacle_width=1,
     obstacle_color=(0, 0, 255),
-    field_of_view=120,
-    number_of_rays=40,
+    field_of_view=180,
+    number_of_rays=60,
     ray_color=(255, 255, 0),
     player=0,
-    draw_rays=True
+    draw_rays=False
 )
 
 ga_config = collections.namedtuple('Genetic_Algorithm_Config', [

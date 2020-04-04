@@ -70,11 +70,12 @@ class GeneticAlgorithm(object):
     def get_the_next_generation(self, current_generation):
         next_gen = []
         sorted_population = self.__sort_population_by_fitness(current_generation)
+
         for gen in sorted_population:
             print gen.fitness,
+        print
 
         next_gen.extend(self.selection(sorted_population))
-        print len(next_gen)
 
         while self.__need_new_child(next_gen):
             offspring1, offspring2 = self.crossover(next_gen[0], next_gen[1])

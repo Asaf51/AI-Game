@@ -1,64 +1,90 @@
-import collections
 import random
 
-
-ga_config = collections.namedtuple('Genetic_Algorigthm_Config', [
-    'population_size'
-])(
-    population_size=10
-)
+from config import ga_config, nn_config
 
 
 class GeneticAlgorithm(object):
     def __init__(self):
-        self.population_fitness = []
+        pass
 
-    def feed_fitness(self, fitness_score):
-        self.population_fitness.append(fitness_score)
+    def __sort_population_by_fitness(self, generation):
+        return sorted(generation, key=lambda c: c.evaluate(), reverse=True)
 
-    def __reset_generation(self, generation):
-        for single in generation:
-            single.reset()
+    def selection(self, population):
+        """
+        Get the `self.selection_count` best population to the next level
+        """
+        selection = population[:ga_config.selection_amount]
+        for gen in selection:
+            gen.reset()
 
-    def __swap_bias(self, a, b):
-        tmp = a.nn.bias
-        a.nn.bias = b.nn.bias
-        b.nn.bias = tmp
+        return selection
 
-    def __crossover(self, a, b):
-        a = a.duplicate()
-        b = b.duplicate()
+    def crossover(self, parent1, parent2):
+        offspring1 = parent1.duplicate()
+        offspring2 = parent2.duplicate()
 
-        self.__swap_bias(a, b)
-        return a, b
+        for i in xrange(nn_config.input_layer_size):
+            for j in xrange(nn_config.hidden_layer_size):
+                if random.random() < ga_config.crossover_swap_probability:
+                    new_offspring1_value = parent2.nn.get_input_weight(i, j)
+                    new_offspring2_value = parent1.nn.get_input_weight(i, j)
+                else:
+                    new_offspring1_value = parent1.nn.get_input_weight(i, j)
+                    new_offspring2_value = parent2.nn.get_input_weight(i, j)
+
+                offspring1.nn.change_input_weight(i, j, new_offspring1_value)
+                offspring2.nn.change_input_weight(i, j, new_offspring2_value)
+
+        for i in xrange(nn_config.hidden_layer_size):
+            for j in xrange(nn_config.output_layer_size):
+                if random.random() < ga_config.crossover_swap_probability:
+                    new_offspring1_value = parent2.nn.get_hidden_weight(i, j)
+                    new_offspring2_value = parent1.nn.get_hidden_weight(i, j)
+                else:
+                    new_offspring1_value = parent1.nn.get_hidden_weight(i, j)
+                    new_offspring2_value = parent2.nn.get_hidden_weight(i, j)
+
+                offspring1.nn.change_hidden_weight(i, j, new_offspring1_value)
+                offspring2.nn.change_hidden_weight(i, j, new_offspring2_value)
+
+        return offspring1, offspring2
+
+    def mutate(self, gen):
+        mut_amount = ga_config.mutation_amout
+        for i in xrange(nn_config.input_layer_size):
+            for j in xrange(nn_config.hidden_layer_size):
+                if random.random() < ga_config.mutation_probability:
+                    gen.nn.change_input_weight(
+                        i, j, gen.nn.get_input_weight(i, j) + (random.random() * (mut_amount * 2) - mut_amount))
+
+        for i in xrange(nn_config.hidden_layer_size):
+            for j in xrange(nn_config.output_layer_size):
+                if random.random() < ga_config.mutation_probability:
+                    gen.nn.change_hidden_weight(
+                        i, j, gen.nn.get_hidden_weight(i, j) + (random.random() * (mut_amount * 2) - mut_amount))
+
+    def __need_new_child(self, next_gen):
+        return len(next_gen) < ga_config.population_size
 
     def get_the_next_generation(self, current_generation):
         next_gen = []
+        sorted_population = self.__sort_population_by_fitness(current_generation)
+        for gen in sorted_population:
+            print gen.fitness,
 
-        sorted_cars = sorted(current_generation, key=lambda c: c.fitness, reverse=True)
+        next_gen.extend(self.selection(sorted_population))
+        print len(next_gen)
 
-        # Get the best four
-        next_gen.extend(sorted_cars[:4])
-        self.__reset_generation(next_gen)
+        while self.__need_new_child(next_gen):
+            offspring1, offspring2 = self.crossover(next_gen[0], next_gen[1])
+            next_gen.append(offspring1)
 
-        """offsprings = []
+            if self.__need_new_child(next_gen):
+                next_gen.append(offspring2)
 
-        first, second = sorted_cars[:2]
-        first, second = self.__crossover(first, second)
-        offsprings.append(first if random.random() > 0.5 else second)
-
-        for i in xrange(3):
-            first, second = random.choice(sorted_cars), random.choice(sorted_cars)
-            first, second = self.__crossover(first, second)
-            offsprings.append(first if random.random() > 0.5 else second)
-
-        for i in xrange(2):
-            offsprings.append(random.choice(sorted_cars))
-
-        for offspring in offsprings:
-            if random.random() > 0.5:
-                offspring.nn.bias = offspring.nn.bias * ((1 + random.random() - 0.5) * 3 + (random.random() - 0.5))
-
-        next_gen.extend(offsprings)"""
+        for gen in next_gen:
+            if random.random() < ga_config.precent_of_mutations:
+                self.mutate(gen)
 
         return next_gen
